@@ -39,12 +39,12 @@ function _M.run(conf)
 
     end
 
-
-    local callback_url = ngx.var.scheme .. "://" .. ngx.var.host .. path_prefix .. "/oauth2/callback"
+    local azure_base_url = "https://login.microsoftonline.com/" .. conf.domain_name .. "/oauth2/v2.0"
+    local callback_url = ngx.var.scheme .. "://" .. ngx.var.host.. ":8000" .. path_prefix .. "/oauth2/callback"
 
     -- check if we're calling the callback endpoint
     if ngx.re.match(ngx.var.request_uri, string.format(OAUTH_CALLBACK, path_prefix)) then
-        handle_callback(conf, callback_url)
+        handle_callback(conf,azure_base_url, callback_url)
     else
         local encrypted_token = ngx.var.cookie_EOAuthToken
         -- check if we are authenticated already
@@ -54,13 +54,17 @@ function _M.run(conf)
             local access_token = decode_token(encrypted_token, conf)
             if not access_token then
                 -- broken access token
-                return redirect_to_auth( conf, callback_url )
+                return redirect_to_auth( conf,azure_base_url, callback_url )
             end
 
             -- Get user info
             if not ngx.var.cookie_EOAuthUserInfo then
+
+                --Extract user infor from access token
+                
+
                 local httpc = http:new()
-                local res, err = httpc:request_uri(conf.user_url, {
+                local res, err = httpc:request_uri(azure_base_url .. "/token&p=" .. conf.signin_policy, {
                     method = "GET",
                     ssl_verify = false,
                     headers = {
@@ -71,19 +75,19 @@ function _M.run(conf)
                 if res then
                     -- redirect to auth if user result is invalid not 200
                     if res.status ~= 200 then
-                        return redirect_to_auth( conf, callback_url )
+                        return redirect_to_auth( conf,azure_base_url, callback_url )
                     end
 
                     local json = cjson.decode(res.body)
 
-                    if conf.hosted_domain ~= "" and conf.email_key ~= "" then
-                        if not pl_stringx.endswith(json[conf.email_key], conf.hosted_domain) then
-                            ngx.status = 401
-                            ngx.say("Hosted domain is not matching")
-                            ngx.exit(ngx.HTTP_OK)
-                            return
-                        end
-                    end
+                    -- if conf.hosted_domain ~= "" and conf.email_key ~= "" then
+                    --     if not pl_stringx.endswith(json[conf.email_key], conf.hosted_domain) then
+                    --         ngx.status = 401
+                    --         ngx.say("Hosted domain is not matching")
+                    --         ngx.exit(ngx.HTTP_OK)
+                    --         return
+                    --     end
+                    -- end
 
                     for i, key in ipairs(conf.user_keys) do
                         ngx.header["X-Oauth-".. key] = json[key]
@@ -106,26 +110,28 @@ function _M.run(conf)
 
 
         else
-            return redirect_to_auth( conf, callback_url )
+            return redirect_to_auth( conf,azure_base_url, callback_url )
         end
     end
 
 end
 
-function redirect_to_auth( conf, callback_url )
+function redirect_to_auth( conf,azurebase, callback_url )
     -- Track the endpoint they wanted access to so we can transparently redirect them back
     ngx.header["Set-Cookie"] = "EOAuthRedirectBack=" .. ngx.var.request_uri .. "; path=/;Max-Age=120"
     -- Redirect to the /oauth endpoint
-    local oauth_authorize = conf.authorize_url .. "?response_type=code&client_id=" .. conf.client_id .. "&redirect_uri=" .. callback_url .. "&scope=" .. conf.scope
+    local oauth_authorize = azurebase .. "/authorize?response_type=code&response_mode=query&p=".. conf.signin_policy .."&client_id=" .. conf.application_id .. "&redirect_uri=" .. callback_url .. "&scope=openid%20offline_access%20" .. conf.application_id
     return ngx.redirect(oauth_authorize)
 end
 
 function encode_token(token, conf)
-    return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.client_secret)))
+    --return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.client_secret)))
+    return ngx.encode_base64(token)
 end
 
 function decode_token(token, conf)
-    status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.client_secret)) end)
+    --status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.client_secret)) end)
+    status, token = pcall(function () return ngx.decode_base64(token) end)
     if status then
         return token
     else
@@ -134,19 +140,23 @@ function decode_token(token, conf)
 end
 
 -- Callback Handling
-function  handle_callback( conf, callback_url )
+function  handle_callback( conf,azurebase, callback_url )
     local args = ngx.req.get_uri_args()
 
     if args.code then
         local httpc = http:new()
-        local res, err = httpc:request_uri(conf.token_url, {
+        local res, err = httpc:request_uri(azurebase .. "/token?p=" .. conf.signin_policy, {
             method = "POST",
             ssl_verify = false,
-            body = "grant_type=authorization_code&client_id=" .. conf.client_id .. "&client_secret=" .. conf.client_secret .. "&code=" .. args.code .. "&redirect_uri=" .. callback_url,
+            body = "grant_type=authorization_code&client_id=" .. conf.application_id .. "&client_secret=".. conf.application_key .."&code=" .. args.code .. "&redirect_uri=" .. callback_url,
             headers = {
               ["Content-Type"] = "application/x-www-form-urlencoded",
             }
         })
+
+        -- ngx.status = res.status
+        -- ngx.say(res.body)
+        -- ngx.exit(ngx.HTTP_OK)
 
         if not res then
             ngx.status = res.status
@@ -154,7 +164,14 @@ function  handle_callback( conf, callback_url )
             ngx.exit(ngx.HTTP_OK)
         end
 
-        local json = cjson.decode(res.body)
+        status, json = pcall(function() return cjson.decode(res.body) end)
+
+        if not status then
+            ngx.status = 500
+            ngx.say("unable to parse response:" .. res.body)
+            ngx.exit(ngx.HTTP_OK)
+        end
+
         local access_token = json.access_token
         if not access_token then
             ngx.status = 500

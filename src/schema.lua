@@ -14,14 +14,12 @@ end
 
 return {
   fields = {
-    authorize_url = {type = "url", required = true, func = validate_url},
-    token_url = {type = "url", required = true, func = validate_url},
-    client_id = {type = "string", required = true},
-    client_secret = {type = "string", required = true},
+    domain_name = {type = "string", required = true},
+    application_id = {type = "string", required = true},
+    application_key = {type = "string", required = true},
+    signin_policy  = {type = "string", required = true},
+    
     user_info_periodic_check = {type = "number", required = true, default = 60},
-    scope = {type = "string", default = ""},
-    user_keys = {type = "array", default = {"username", "email"}},
-    hosted_domain = {type = "string", default = ""},
-    email_key = {type = "string", default = ""}
+    
   }
 }

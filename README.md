@@ -1,4 +1,4 @@
-# Kong External OAUTH 2.0
+# Kong Azure ActiveDirectory B2C Auth
 
 A Kong plugin, that let you use an external Oauth 2.0 provider to protect your API.
 
