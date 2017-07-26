@@ -16,12 +16,11 @@ return {
   fields = {
     authorize_url = {type = "url", required = true, func = validate_url},
     token_url = {type = "url", required = true, func = validate_url},
-    user_url  = {type = "url", required = true, func = validate_url},
     client_id = {type = "string", required = true},
     client_secret = {type = "string", required = true},
+    user_info_periodic_check = {type = "number", required = true, default = 60},
     scope = {type = "string", default = ""},
     user_keys = {type = "array", default = {"username", "email"}},
-    user_info_periodic_check = {type = "number", required = true, default = 60},
     hosted_domain = {type = "string", default = ""},
     email_key = {type = "string", default = ""}
   }

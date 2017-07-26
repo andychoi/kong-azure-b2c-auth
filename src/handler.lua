@@ -14,12 +14,12 @@
 -- limitations under the License.
 
 local BasePlugin = require "kong.plugins.base_plugin"
-local access = require "kong.plugins.external-oauth.access"
+local access = require "kong.plugins.azure-b2c-auth.access"
 
 local ExtOauthPlugin = BasePlugin:extend()
 
 function ExtOauthPlugin:new()
-	ExtOauthPlugin.super.new(self, "external-oauth")
+	ExtOauthPlugin.super.new(self, "azure-b2c-auth")
 end
 
 function ExtOauthPlugin:access(conf)

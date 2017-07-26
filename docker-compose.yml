@@ -1,0 +1,46 @@
+version: '2'
+
+services:
+  kong:
+    build: .
+    depends_on:
+      - kong-database
+    ports:
+      - 8000:8000
+      - 8443:8443
+      - 8001:8001
+      - 7946:7946
+      - 7946:7946/udp
+    environment:
+      - KONG_DATABASE=postgres
+      - KONG_PG_HOST=kong-database
+
+  kong-database:
+    image: postgres:9.4
+    ports:
+    - 5432
+    environment:
+    - POSTGRES_USER=kong
+    - POSTGRES_DB=kong
+    volumes:
+    - /var/lib/postgresql/data
+
+  konga:
+    image: pantsel/konga:latest
+    depends_on:
+      - kong
+      - konga-db
+    ports:
+      - 1337:1337
+    environment:
+      - DB_ADAPTER=mongo
+      - DB_HOST=konga-db
+      - DB_DATABASE=konga
+      - NODE_ENV=production
+
+  konga-db:
+    image: mongo
+    volumes:
+      - /data/db
+
+    
