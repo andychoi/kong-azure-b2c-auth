@@ -125,13 +125,13 @@ function redirect_to_auth( conf,azurebase, callback_url )
 end
 
 function encode_token(token, conf)
-    --return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.client_secret)))
-    return ngx.encode_base64(token)
+    return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.client_secret)))
+    --return ngx.encode_base64(token)
 end
 
 function decode_token(token, conf)
-    --status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.client_secret)) end)
-    status, token = pcall(function () return ngx.decode_base64(token) end)
+    status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.client_secret)) end)
+    --status, token = pcall(function () return ngx.decode_base64(token) end)
     if status then
         return token
     else
@@ -154,10 +154,6 @@ function  handle_callback( conf,azurebase, callback_url )
             }
         })
 
-        -- ngx.status = res.status
-        -- ngx.say(res.body)
-        -- ngx.exit(ngx.HTTP_OK)
-
         if not res then
             ngx.status = res.status
             ngx.say("failed to request: ", err)
@@ -179,7 +175,24 @@ function  handle_callback( conf,azurebase, callback_url )
             ngx.exit(ngx.HTTP_OK)
         end
 
+        --check against validation service
+        local vRes, vErr = httpc:request_uri("http://" .. conf.validation_host .. "/verify?token=" .. access_token, { method = "GET"})
+        if not vRes then
+            ngx.status = 500
+            ngx.say("unable to verify token using " .. conf.validation_host .. " --> " .. vErr)
+            ngx.exit(ngx.HTTP_OK)
+        end
+        local verifyJson = cjson.decode(vRes.body)
+        if not verifyJson.token_valid then
+            ngx.status = 403
+            ngx.say("invalid token")
+            ngx.exit(ngx.HTTP_OK)
+        end
 
+        
+        --token is valid and we can use stuff from it
+        ngx.header["Set-Cookie"] = "AzureAuthToken=".. ngx.encode_base64(verifyJson.decoded_token) .. "; path=/;Max-Age=3000;HttpOnly"
+       
         ngx.header["Set-Cookie"] = "EOAuthToken="..encode_token( access_token, conf ) .. "; path=/;Max-Age=3000;HttpOnly"
         -- Support redirection back to your request if necessary
         local redirect_back = ngx.var.cookie_EOAuthRedirectBack

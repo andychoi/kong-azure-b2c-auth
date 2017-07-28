@@ -18,7 +18,7 @@ return {
     application_id = {type = "string", required = true},
     application_key = {type = "string", required = true},
     signin_policy  = {type = "string", required = true},
-    
+    validation_host = {type = "string", required = true},
     user_info_periodic_check = {type = "number", required = true, default = 60},
     
   }
