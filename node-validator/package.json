@@ -1,0 +1,19 @@
+{
+  "name": "node-jwt-validator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^2.0.1",
+    "clear": "0.0.1",
+    "express": "^4.15.3",
+    "figlet": "^1.2.0",
+    "jsonwebtoken": "^7.4.1",
+    "jwk-to-pem": "^1.2.6"
+  }
+}
