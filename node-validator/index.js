@@ -31,7 +31,7 @@ app.get('/verify', (req, res) => {
     console.log(chalk.green('[SIGN KID]') + ' ' + kid);
 
     fetchKeys(decodedToken.payload, kid, (pemkey) => {
-        jwt.verify(req.query.token, pemkey, (err, decoded) => {
+        jwt.verify(req.query.token, pemkey,{ignoreNotBefore:true}, (err, decoded) => {
             console.log(chalk.green('[VERIFIED] ' + err));
 
             if (err) {

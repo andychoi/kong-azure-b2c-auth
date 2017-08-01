@@ -22,6 +22,17 @@ local crypto = require "crypto"
 local OAUTH_CALLBACK = "^%s/oauth2/callback(/?(\\?[^\\s]*)*)$"
 
 function _M.run(conf)
+    status, err = pcall(function() return handle_azure(conf) end)
+
+    if not status then
+        ngx.status = 500
+        ngx.say("error in azure auth:\n\n" .. err)
+        ngx.exit(ngx.HTTP_OK)
+    end
+end
+
+function handle_azure(conf)
+
      -- Check if the API has a request_path and if it's being invoked with the path resolver
     local path_prefix = ""
 
@@ -49,64 +60,18 @@ function _M.run(conf)
         local encrypted_token = ngx.var.cookie_EOAuthToken
         -- check if we are authenticated already
         if encrypted_token then
-            ngx.header["Set-Cookie"] = "EOAuthToken=" .. encrypted_token .. "; path=/;Max-Age=3000;HttpOnly"
+        
+            add_cookie("EOAuthToken=" .. encrypted_token .. "; path=/;Max-Age=3000;HttpOnly")
 
-            local access_token = decode_token(encrypted_token, conf)
-            if not access_token then
+            local cookieToken = cjson.decode(decode_token(encrypted_token, conf))
+            if not cookieToken then
                 -- broken access token
                 return redirect_to_auth( conf,azure_base_url, callback_url )
             end
 
-            -- Get user info
-            if not ngx.var.cookie_EOAuthUserInfo then
+            
 
-                --Extract user infor from access token
-                
-
-                local httpc = http:new()
-                local res, err = httpc:request_uri(azure_base_url .. "/token&p=" .. conf.signin_policy, {
-                    method = "GET",
-                    ssl_verify = false,
-                    headers = {
-                      ["Authorization"] = "Bearer " .. access_token,
-                    }
-                })
-
-                if res then
-                    -- redirect to auth if user result is invalid not 200
-                    if res.status ~= 200 then
-                        return redirect_to_auth( conf,azure_base_url, callback_url )
-                    end
-
-                    local json = cjson.decode(res.body)
-
-                    -- if conf.hosted_domain ~= "" and conf.email_key ~= "" then
-                    --     if not pl_stringx.endswith(json[conf.email_key], conf.hosted_domain) then
-                    --         ngx.status = 401
-                    --         ngx.say("Hosted domain is not matching")
-                    --         ngx.exit(ngx.HTTP_OK)
-                    --         return
-                    --     end
-                    -- end
-
-                    for i, key in ipairs(conf.user_keys) do
-                        ngx.header["X-Oauth-".. key] = json[key]
-                    end
-                    ngx.header["X-Oauth-Token"] = access_token
-
-                    if type(ngx.header["Set-Cookie"]) == "table" then
-                        ngx.header["Set-Cookie"] = { "EOAuthUserInfo=0; Path=/;Max-Age=" .. conf.user_info_periodic_check .. ";HttpOnly", unpack(ngx.header["Set-Cookie"]) }
-                    else
-                        ngx.header["Set-Cookie"] = { "EOAuthUserInfo=0; Path=/;Max-Age=" .. conf.user_info_periodic_check .. ";HttpOnly", ngx.header["Set-Cookie"] }
-                    end
-
-                else
-                    ngx.status = 500
-                    ngx.say(err)
-                    ngx.exit(ngx.HTTP_OK)
-                    return
-                end
-            end
+            add_cookie("AzureAuthToken=".. ngx.encode_base64(cjson.encode(cookieToken["decoded"])) .. "; path=/;Max-Age=3000;")
 
 
         else
@@ -125,12 +90,12 @@ function redirect_to_auth( conf,azurebase, callback_url )
 end
 
 function encode_token(token, conf)
-    return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.client_secret)))
+    return ngx.encode_base64(crypto.encrypt("aes-128-cbc", token, crypto.digest('md5',conf.application_key)))
     --return ngx.encode_base64(token)
 end
 
 function decode_token(token, conf)
-    status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.client_secret)) end)
+    status, token = pcall(function () return crypto.decrypt("aes-128-cbc", ngx.decode_base64(token), crypto.digest('md5',conf.application_key)) end)
     --status, token = pcall(function () return ngx.decode_base64(token) end)
     if status then
         return token
@@ -189,11 +154,12 @@ function  handle_callback( conf,azurebase, callback_url )
             ngx.exit(ngx.HTTP_OK)
         end
 
+        local cookieToken = {}
+        cookieToken["decoded"] = verifyJson.decoded_token;
+        cookieToken["token"] = access_token;
         
         --token is valid and we can use stuff from it
-        ngx.header["Set-Cookie"] = "AzureAuthToken=".. ngx.encode_base64(verifyJson.decoded_token) .. "; path=/;Max-Age=3000;HttpOnly"
-       
-        ngx.header["Set-Cookie"] = "EOAuthToken="..encode_token( access_token, conf ) .. "; path=/;Max-Age=3000;HttpOnly"
+        add_cookie("EOAuthToken="..encode_token( cjson.encode(cookieToken), conf ) .. "; path=/;Max-Age=3000;HttpOnly")
         -- Support redirection back to your request if necessary
         local redirect_back = ngx.var.cookie_EOAuthRedirectBack
         if redirect_back then
@@ -208,4 +174,20 @@ function  handle_callback( conf,azurebase, callback_url )
     end
 end
 
+function get_cookies()
+  local cookies = ngx.header["Set-Cookie"] or {}
+ 
+  if type(cookies) == "string" then
+    cookies = {cookies}
+  end
+ 
+  return cookies
+end
+ 
+ 
+function add_cookie(cookie)
+  local cookies = get_cookies()
+  table.insert(cookies, cookie)
+  ngx.header['Set-Cookie'] = cookies
+end
 return _M
