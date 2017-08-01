@@ -2,9 +2,10 @@ version: '2'
 
 services:
   kong:
-    build: .
+    build: kong-plugin/.
     depends_on:
       - kong-database
+      - jwtvalidator
     ports:
       - 8000:8000
       - 8443:8443
@@ -14,6 +15,10 @@ services:
     environment:
       - KONG_DATABASE=postgres
       - KONG_PG_HOST=kong-database
+  
+  jwtvalidator:
+    build: node-validator/.
+
 
   kong-database:
     image: postgres:9.4

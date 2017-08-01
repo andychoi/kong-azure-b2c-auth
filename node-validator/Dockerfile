@@ -1,7 +1,9 @@
-FROM kong
+FROM node:alpine
+EXPOSE 3055
+RUN mkdir -p /usr/src/app
+WORKDIR /usr/src/app
+COPY package.json /usr/src/app/
+RUN npm install && npm cache clean --force
+COPY . /usr/src/app
 
-RUN mkdir /pluginsrc
-COPY . /pluginsrc
-WORKDIR /pluginsrc
-RUN luarocks make
-ENV KONG_CUSTOM_PLUGINS=azure-b2c-auth
+CMD [ "npm", "start" ]

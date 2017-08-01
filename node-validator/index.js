@@ -97,9 +97,9 @@ var fetchKeys = function (tokenPayload, kid, callback) {
 }
 
 clear();
-console.log(chalk.green(figlet.textSync('Transim JWT Validator')));
+console.log(chalk.green(figlet.textSync('Azure JWT Validator')));
 
 //start the server
-app.listen(3000, () => {
+app.listen(3055, () => {
     console.log(chalk.yellow('Validator is listening on port 3000!'));
 });
